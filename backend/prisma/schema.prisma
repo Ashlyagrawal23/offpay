@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// A real OffPay user. Signs up with a username + password (login) and a
+// separate UPI-style PIN (payment authorization) — the same split real UPI
+// apps use. `vpa` is their Virtual Payment Address, derived from username.
+// `version` gives us optimistic locking on balance updates.
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  vpa          String   @unique
+  displayName  String
+  passwordHash String
+  pinHash      String
+  balance      Decimal  @db.Decimal(19, 2) @default(1000.00)
+  version      Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@map("users")
+}
+
+// Permanent record of every settlement attempt. Once written, never
+// modified. packetHash is the idempotency key — uniqueness is enforced at
+// the DB level as a defense-in-depth fallback if the in-memory cache layer
+// (or, in production, Redis) ever fails.
+model Transaction {
+  id           Int      @id @default(autoincrement())
+  packetHash   String   @unique
+  senderVpa    String
+  receiverVpa  String
+  amount       Decimal  @db.Decimal(19, 2)
+  signedAt     DateTime
+  settledAt    DateTime
+  bridgeNodeId String
+  hopCount     Int
+  status       String // "SETTLED" | "REJECTED"
+
+  @@map("transactions")
+}
